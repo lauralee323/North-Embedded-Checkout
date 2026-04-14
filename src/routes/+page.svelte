@@ -9,6 +9,38 @@
 
 	let { data }: any = $props();
 
+	/** Full URL to checkout.js (env may be base host or path ending in .js). */
+	const checkoutJsUrl = (() => {
+		const u = env.PUBLIC_CHECKOUT_JS_URL?.trim() ?? '';
+		if (!u) return '';
+		if (u.endsWith('.js')) return u;
+		return `${u.replace(/\/$/, '')}/checkout.js`;
+	})();
+
+	function loadCheckoutScript(src: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const w = window as any;
+			if (w.checkout?.mount) {
+				resolve();
+				return;
+			}
+			const script = document.createElement('script');
+			script.src = src;
+			script.async = true;
+			script.onload = () => {
+				if (!(window as any).checkout?.mount) {
+					reject(
+						new Error('checkout.js loaded but window.checkout.mount is missing (unexpected global API)')
+					);
+					return;
+				}
+				resolve();
+			};
+			script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+			document.head.appendChild(script);
+		});
+	}
+
 	console.log(data.session);
 
 	if (data && data.err) {
@@ -37,19 +69,21 @@
 		}
 
 		if (data && data.session && data.session.token) {
+			if (!checkoutJsUrl) {
+				errorMessage = 'PUBLIC_CHECKOUT_JS_URL is not set.';
+				return;
+			}
 			try {
-				// Mount component
+				await loadCheckoutScript(checkoutJsUrl);
 				checkoutInstance = (window as any).checkout.mount(data.session.token, 'checkout-container');
 				console.log('Checkout mounted!');
 
-				// Register callback for payment completion
 				unsubscribePaymentComplete = (window as any).checkout.onPaymentComplete((response: any) => {
 					console.log('Payment completed! Response:', response);
 				});
 			} catch (error: any) {
 				console.error('Failed to load Checkout-js', error);
-				errorMessage =
-					'Failed to load Checkout-js at this url ' + `${env.PUBLIC_CHECKOUT_JS_URL}/checkout.js`;
+				errorMessage = `Failed to load Checkout-js at ${checkoutJsUrl}`;
 			}
 		}
 	});
@@ -60,12 +94,6 @@
 		}
 	});
 </script>
-
-<svelte:head>
-	{#if data.session}
-		<script type="text/javascript" src={`${env.PUBLIC_CHECKOUT_JS_URL}`}></script>
-	{/if}
-</svelte:head>
 
 <div class="flex h-screen w-full flex-col">
 	<div class="flex-shrink-0">
