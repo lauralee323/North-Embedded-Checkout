@@ -1,0 +1,8 @@
+{
+	"/": [
+		"src/routes/+page.server.ts"
+	],
+	"/decline": [
+		"src/routes/decline/+page.server.ts"
+	]
+}
